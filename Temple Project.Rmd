@@ -1,0 +1,222 @@
+---
+title: "Temple Project"
+output: html_document
+date: "2023-06-14"
+---
+# install tidy census package to retrieve files 
+```{r}
+install.packages("tidycensus")
+```
+# install required packages 
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+```
+# install package to access public use microdata 
+```{r}
+install.packages("ipumsr")
+```
+# read in data
+```{r}
+# data is the data from the year 2016-2021 in the 5-year public use microdata survey
+setwd('TempleIPUMS')
+library(ipumsr)
+ddi <- read_ipums_ddi("usa_00007.xml")
+data <- read_ipums_micro(ddi)
+```
+
+```{r}
+# NMOdata is the data for New Mexico and Oregon from 2009 to 2021 from the 5-year public use microdata
+setwd('TempleIPUMS')
+library(ipumsr)
+ddi <- read_ipums_ddi("usa_00009.xml")
+NMGdata <- read_ipums_micro(ddi)
+```
+# extract data 
+```{r}
+# Temple/Belton PUMA Texas count of individuals with each degree as field of first degree 
+data %>%
+   filter(STATEICP == 49 & PUMA == 03502 & DEGFIELD > 0)  %>%
+   group_by(DEGFIELD = haven::as_factor(DEGFIELD)) %>%
+   summarize(n = n()) %>%
+   mutate(pct = n / sum(n))
+```
+```{r}
+# Los Lunas, NM PUMA count of individuals with each degree as field of first degree
+NMGdata %>%
+   filter(PUMA == 00700 & DEGFIELD > 0 & YEAR == 2021 & STATEICP == 66)  %>%
+   group_by(DEGFIELD = haven::as_factor(DEGFIELD)) %>%
+   summarize(n = n()) %>%
+   mutate(pct = n / sum(n))
+```
+```{r}
+# Stanton Springs GA count of individuals with each degree as field of first degree
+NMGdata %>%
+   filter(STATEICP == 44 & PUMA == 2000)  %>%
+   group_by(DEGFIELD = haven::as_factor(DEGFIELD)) %>%
+   summarize(n = n()) %>%
+   mutate(pct = n / sum(n))
+```
+
+```{r}
+# Temple/Belton PUMA Engineers Avg Salary 
+data %>%
+   filter(STATEICP == 49 & PUMA == 03502 & DEGFIELD == 24 & INCTOT != 9999999)  %>%
+   summarize(INCTOT = weighted.mean(INCTOT, PERWT))
+```
+```{r}
+# Temple/Belton PUMA Engineer Technology Degrees Avg Salary 
+data %>%
+   filter(STATEICP == 49 & PUMA == 03502 & DEGFIELD == 25 & INCTOT != 9999999)  %>%
+   summarize(INCTOT = weighted.mean(INCTOT, PERWT))
+```
+```{r} 
+# Temple/Belton PUMA Average Age for Engineers
+data %>%
+   filter(STATEICP == 49 & PUMA == 03502 & (DEGFIELD == 25 | DEGFIELD == 24) & INCTOT != 9999999)  %>%
+   summarize(AGE = weighted.mean(AGE, PERWT))
+```
+
+
+```{r}
+# Los Lunas Engineer Degrees Avg Salary 
+data %>%
+   filter(PUMA == 00700 & DEGFIELD == 24)  %>%
+   summarize(INCTOT = weighted.mean(INCTOT, PERWT))
+```
+
+```{r}
+# Avg Travel Time Temple/Belton PUMA 
+data %>%
+   filter(PUMA == 03502 & (DEGFIELD == 24 | DEGFIELD == 25))  %>%
+   summarize(TRANTIME = weighted.mean(TRANTIME, PERWT))
+```
+
+```{r}
+# convert Temple/Belton PUMA degree data to data frame 
+pie_data <- as.data.frame(data %>%
+   filter(PUMA == 03502 & DEGFIELD > 0)  %>%
+   group_by(DEGFIELD = haven::as_factor(DEGFIELD)) %>%
+   summarize(n = n()) %>%
+   mutate(pct = n / sum(n))) 
+```
+
+```{r}
+# Find Most Common Degrees
+two_columns <- pie_data[,1:2]
+names(two_columns)[1] ="group"
+names(two_columns)[2] = "value" 
+arrange(two_columns, value, ascending= FALSE)
+```
+
+```{r} 
+# pie chart for temple degrees 
+bp<- ggplot(two_columns, aes(x="", y=value, fill=group))+
+geom_bar(width = 1, stat = "identity") + coord_polar("y", start=0)
+#+ theme(legend.position="none")
+```
+
+
+```{r}
+# make a total number of degrees and data frame with "other" category for small fields
+total = sum(two_columns$value)
+simp_pie <- data.frame(group  = c("Education Administration and Teaching", "Business", "Medical and Health Sciences and Services", "Biology and Life Sciences",  "Engineering or Engineering Technology", "Social Sciences" , "Other" ),
+                  value = c(336, 331, 186, 119, 87 + 18, 93, total - (336 + 331 + 186 + 119 + 87 + 18 + 93)))
+```
+```{r}
+# make pie chart 
+bp<- ggplot(simp_pie, aes(x="", y=value, fill=group))+
+geom_bar(width = 1, stat = "identity") + coord_polar("y", start=0)  + ggtitle("Individuals with Bachelor's Degree in Temple / Belton PUMA by Field of First Degree") + 
+  theme(axis.text = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(), 
+        axis.ticks = element_blank(),
+        panel.grid  = element_blank()) + guides(fill=guide_legend(title="Field of First Degree"))
+bp
+```
+
+
+```{r}
+# Los Luna Engineers over time 
+yearly_eng <- data.frame(NMGdata %>%
+   filter(STATEICP == 66 & PUMA == 00700 & DEGFIELD == 24)  %>%
+   group_by(YEAR) %>%
+   summarize(n = n())) %>%
+  mutate(pct = n / sum(n) * 100)
+```
+
+
+```{r}
+# plot engineers over time Los Lunas 
+ggplot(yearly_eng, aes(x=YEAR, y=pct)) +
+    geom_point() + geom_line()
+```
+```{r}
+# make the data frame
+yearly_engG <- data.frame(NMGdata %>%
+   filter(STATEICP == 44 & PUMA == 2100 & DEGFIELD == 24)  %>%
+   group_by(YEAR) %>%
+   summarize(n = n())) %>%
+  mutate(pct2 = n / sum(n) * 100)
+# plot the data for georgia
+ggplot(yearly_engG, aes(x=YEAR, y=pct2)) +
+    geom_point() + geom_line()
+yearly_engG
+```
+```{r}
+# plot Stanton Springs, Georgia and Los Lunas New Mexico on one graph 
+one_frame = left_join(yearly_eng, yearly_engG, by = "YEAR")
+ggplot(one_frame, aes(x=YEAR)) + ggtitle("Engineers as a portion of degree holders from 2009-2021") +
+  geom_line(aes(y = pct, color = "darkred")) + 
+  geom_line(aes(y = pct2, color="steelblue")) +
+  scale_color_manual(labels=c('Los Lunas, New Mexico', 'Stanton Springs, Georgia'), values=c('darkred', 'steelblue')) + labs(colour="PUMA (contains)") + xlab("Final Year of 5-Year Aggregated 5% Sample") + ylab("Engineering as Field of First Degree (%)")
+
+```
+```{r}
+df <- data.frame(NMGdata %>%
+   filter((STATEICP == 44 & PUMA == 2100) & DEGFIELD == 24 | 25) %>% 
+     group_by(YEAR))  
+df
+     
+```
+```{r}
+# data frame for avg salaries over time Stanton Springs, Georgia 
+Georgia <- data.frame(NMGdata %>%
+   filter(STATEICP == 44) %>%
+   filter(PUMA == 2100) %>%
+  filter(DEGFIELD == 24 | DEGFIELD == 25) %>%
+  filter(INCTOT != 9999999) %>%
+  filter(EMPSTAT == 1) %>%
+  group_by(YEAR) %>%
+  summarize(INCTOT2 = weighted.mean(INCTOT, PERWT)))
+Georgia
+```
+```{r}
+# make data fram of salaries over time Los Lunas, NM
+NM <- data.frame(NMGdata %>%
+   filter(STATEICP == 66) %>%
+   filter(PUMA == 00700) %>%
+  filter(DEGFIELD == 24 | DEGFIELD == 25) %>%
+  filter(INCTOT != 9999999) %>%
+  filter(EMPSTAT == 1) %>%
+  group_by(YEAR) %>%
+  summarize(INCTOT1 = weighted.mean(INCTOT, PERWT)))
+NM
+```
+
+
+```{r}
+# plot on one graph 
+one_frame2 = left_join(NM, Georgia, by = "YEAR")
+ggplot(one_frame2, aes(x=YEAR)) + ggtitle("Average Engineer Salaries from 2006-2021") +
+  geom_line(aes(y = INCTOT1, color = "darkred")) + 
+  geom_line(aes(y = INCTOT2, color="steelblue")) +
+  scale_color_manual(labels=c('Los Lunas, New Mexico', 'Stanton Springs, Georgia'), values=c('darkred', 'steelblue')) + labs(colour="PUMA (contains)") + xlab("Final Year of 5-year Aggregated 5% Sample") + ylab("Average Salary for Engineer ($)")
+```
+
+
+
+
+
+
